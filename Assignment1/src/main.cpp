@@ -10,11 +10,11 @@
 //
 ////////////////////////////////////////////////////////////////////////
 
-
 #include <iostream>
 #include <sstream>
 #include <vector>
 #include <fstream>
+#include <map>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -23,69 +23,70 @@
 #include "shaderSource.h"
 #include "shader.h"
 
-
 using namespace std;
 
+#define MAX_BUFFER_SIZE 1024
 
-#define MAX_BUFFER_SIZE            1024
+#define _ROTATE_FACTOR 0.005f
+#define _SCALE_FACTOR 0.01f
+#define _TRANS_FACTOR 0.02f
 
-#define _ROTATE_FACTOR              0.005f
-#define _SCALE_FACTOR               0.01f
-#define _TRANS_FACTOR               0.02f
-
-#define _Z_NEAR                     0.001f
-#define _Z_FAR                      100.0f
-
-
+#define _Z_NEAR 0.001f
+#define _Z_FAR 100.0f
 
 /***********************************************************************/
 /**************************   global variables   ***********************/
 /***********************************************************************/
 
-
 // Window size
-unsigned int winWidth  = 800;
+unsigned int winWidth = 800;
 unsigned int winHeight = 600;
 
 // Camera
-glm::vec3 camera_position = glm::vec3 (0.0f, 0.0f, 15.0f);
+glm::vec3 camera_position = glm::vec3(0.0f, 0.0f, 15.0f);
 glm::vec3 camera_target = glm::vec3(0.0f, 0.0f, 0.0f);
 glm::vec3 camera_up = glm::vec3(0.0f, 1.0f, 0.0f);
-float camera_fovy = 45.0f;    
+float camera_fovy = 45.0f;
 glm::mat4 projection;
 
-// Mouse interaction 
+// Mouse interaction
 bool leftMouseButtonHold = false;
 bool isFirstMouse = true;
 float prevMouseX;
 float prevMouseY;
- glm::mat4 modelMatrix = glm::mat4(1.0f);
+glm::mat4 modelMatrix = glm::mat4(1.0f);
 
- // Mesh color table
-glm::vec3 colorTable[4] = 
- {
-    glm::vec3(0.6, 1.0, 0.6),
-    glm::vec3(1.0, 0.6, 0.6),
-    glm::vec3(0.6, 0.6, 1.0),
-    glm::vec3(1.0, 1.0, 0.6) 
-};
+// Mesh color table
+glm::vec3 colorTable[4] =
+    {
+        glm::vec3(0.6, 1.0, 0.6),
+        glm::vec3(1.0, 0.6, 0.6),
+        glm::vec3(0.6, 0.6, 1.0),
+        glm::vec3(1.0, 1.0, 0.6)};
 
 // Mesh rendering color
 int colorID = 0;
-glm::vec3  meshColor;
-
+glm::vec3 meshColor;
 
 // declaration
 void processInput(GLFWwindow *window);
-void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
-void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
-void cursor_pos_callback(GLFWwindow* window, double xpos, double ypos);
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+void framebuffer_size_callback(GLFWwindow *window, int width, int height);
+void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
+void mouse_button_callback(GLFWwindow *window, int button, int action, int mods);
+void cursor_pos_callback(GLFWwindow *window, double xpos, double ypos);
+void scroll_callback(GLFWwindow *window, double xoffset, double yoffset);
 
-
-
-
+vector<unsigned int> split(const string &s, char delim)
+{
+    stringstream ss(s);
+    string item;
+    vector<unsigned int> elems;
+    while (getline(ss, item, delim))
+    {
+        elems.push_back(move(atoi(item.c_str()))); // if C++11 (based on comment from @mchiasson)
+    }
+    return elems;
+}
 
 /******************************************************************************/
 /***************   Functions to be filled in for Assignment 1    **************/
@@ -93,46 +94,102 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 /***************                functions in this section        **************/
 /******************************************************************************/
 
-
 // TODO: insert your code in this function for Mesh Loading
 //       1) store vertices and normals in verList with order (v.x, v.y, v.z, n.x, n.y, n.z)
-//       2) store vertex indices of each triangle in triList 
-int LoadInput(vector<float> &verList, vector<unsigned> &triList)
+//       2) store vertex indices of each triangle in triList
+int LoadInput(vector<float> &verList, vector<unsigned int> &triList)
 {
-    // Note: these two lines of code is to avoid runtime error; 
-    //       please remove them after you fill your own code for 3D model loading
-    verList.push_back(0); 
-    triList.push_back(0);
-    
+    vector<glm::vec3> vertices, normals, triangles;
+    map<int, int> vnmap; // vertex to normal
+
+    string filepath = "./data/mickey.obj";
+    string line;
+
+    ifstream file(filepath);
+
+    while (getline(file, line))
+    {
+        string type, v1, v2, v3;
+        istringstream iss(line);
+
+        if (!(iss >> type >> v1 >> v2 >> v3))
+            continue;
+
+        if (type == "v")
+        {
+            vertices.push_back(glm::vec3(stof(v1), stof(v2), stof(v3)));
+        }
+        else if (type == "vn")
+        {
+            normals.push_back(glm::vec3(stof(v1), stof(v2), stof(v3)));
+        }
+        else if (type == "f")
+        {
+            int vertex, normal, texture;
+            sscanf(v1.c_str(), "%d/%d/%d", &vertex, &texture, &normal);
+
+            triList.push_back(vertex - 1);
+            vnmap[vertex - 1] = normal - 1;
+
+            sscanf(v2.c_str(), "%d/%d/%d", &vertex, &texture, &normal);
+
+            triList.push_back(vertex - 1);
+            vnmap[vertex - 1] = normal - 1;
+
+            sscanf(v3.c_str(), "%d/%d/%d", &vertex, &texture, &normal);
+
+            triList.push_back(vertex - 1);
+            vnmap[vertex - 1] = normal - 1;
+        }
+        else
+        {
+            cout << "Ignoring line " << line << endl;
+        }
+    }
+
+    for (int vertex_index = 0; vertex_index < vertices.size(); vertex_index++)
+    {
+        int normal_index = vnmap[vertex_index];
+
+        glm::vec3 vertex = vertices[vertex_index];
+        glm::vec3 normal = normals[normal_index];
+
+        verList.push_back(vertex.x);
+        verList.push_back(vertex.y);
+        verList.push_back(vertex.z);
+
+        verList.push_back(normal.x);
+        verList.push_back(normal.y);
+        verList.push_back(normal.z);
+    }
+
     return 0;
 }
 
 // TODO: insert your code in this function for Mesh Coloring
 void SetMeshColor(int &colorID)
 {
-   
+    colorID = (colorID + 1) % 4;
 }
 
 // TODO: insert your code in this function for Mesh Transformation (Rotation)
 void RotateModel(float angle, glm::vec3 axis)
 {
-    
+    modelMatrix = glm::rotate(modelMatrix, angle, axis);
 }
 
 // TODO: insert your code in this function for Mesh Transformation (Translation)
-void TranslateModel(glm::vec3 transVec)
+void TranslateModel(glm::vec3 trans_vec)
 {
-
+    camera_position += trans_vec;
 }
 
 // TODO: insert your code in this function for Mesh Transformation (Scaling)
 void ScaleModel(float scale)
 {
-    
+    glm::vec3 scale_factor = glm::vec3(scale, scale, scale);
+    modelMatrix = glm::scale(modelMatrix, scale_factor);
 }
-
-
-
 
 /******************************************************************************/
 /***************                  Callback Function              **************/
@@ -146,116 +203,107 @@ void processInput(GLFWwindow *window)
         glfwSetWindowShouldClose(window, true);
 }
 
-
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
 // ---------------------------------------------------------------------------------------------
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
+void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 {
     // make sure the viewport matches the new window dimensions; note that width and
     // height will be significantly larger than specified on retina displays.
 
     glViewport(0, 0, width, height);
 
-    winWidth  = width;
+    winWidth = width;
     winHeight = height;
 }
 
-
 // glfw: whenever a key is pressed, this callback is called
 // ----------------------------------------------------------------------
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
     if (key == GLFW_KEY_C && action == GLFW_PRESS)
     {
-        SetMeshColor( colorID );
+        SetMeshColor(colorID);
     }
 }
 
-
-void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+void mouse_button_callback(GLFWwindow *window, int button, int action, int mods)
 {
-	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
     {
         leftMouseButtonHold = true;
     }
     else
     {
-    	leftMouseButtonHold = false;
+        leftMouseButtonHold = false;
     }
 }
 
-
 // glfw: whenever the cursor moves, this callback is called
 // -------------------------------------------------------
-void cursor_pos_callback(GLFWwindow* window, double mouseX, double mouseY)
+void cursor_pos_callback(GLFWwindow *window, double mouseX, double mouseY)
 {
-	float  dx, dy;
-	float  nx, ny, scale, angle;
-    
+    float dx, dy;
+    float nx, ny, scale, angle;
 
-	if ( leftMouseButtonHold )
-	{
-		if (isFirstMouse)
-	    {
-	        prevMouseX = mouseX;
-	        prevMouseY = mouseY;
-	        isFirstMouse = false;
-	    }
+    if (leftMouseButtonHold)
+    {
+        if (isFirstMouse)
+        {
+            prevMouseX = mouseX;
+            prevMouseY = mouseY;
+            isFirstMouse = false;
+        }
 
-	    else
-	    {
-            if( glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS )
+        else
+        {
+            if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
             {
-                float dx =         _TRANS_FACTOR * (mouseX - prevMouseX);
+                float dx = _TRANS_FACTOR * (mouseX - prevMouseX);
                 float dy = -1.0f * _TRANS_FACTOR * (mouseY - prevMouseY); // reversed since y-coordinates go from bottom to top
 
                 prevMouseX = mouseX;
                 prevMouseY = mouseY;
 
-                TranslateModel( glm::vec3(dx, dy, 0) );  
+                TranslateModel(glm::vec3(dx, dy, 0));
             }
 
             else
             {
-                float dx =   mouseX - prevMouseX;
+                float dx = mouseX - prevMouseX;
                 float dy = -(mouseY - prevMouseY); // reversed since y-coordinates go from bottom to top
 
                 prevMouseX = mouseX;
                 prevMouseY = mouseY;
 
-               // Rotation
-                nx    = -dy;
-                ny    =  dx;
-                scale = sqrt(nx*nx + ny*ny);
+                // Rotation
+                nx = -dy;
+                ny = dx;
+                scale = sqrt(nx * nx + ny * ny);
 
                 // We use "ArcBall Rotation" to compute the rotation axis and angle based on the mouse motion
-                nx    = nx / scale;
-                ny    = ny / scale;
+                nx = nx / scale;
+                ny = ny / scale;
                 angle = scale * _ROTATE_FACTOR;
 
-                RotateModel( angle, glm::vec3(nx, ny, 0.0f) );
+                RotateModel(angle, glm::vec3(nx, ny, 0.0f));
             }
-	    }  
-	}  
+        }
+    }
 
-	else
-	{
-		isFirstMouse = true;
-	}
+    else
+    {
+        isFirstMouse = true;
+    }
 }
-
 
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called
 // ----------------------------------------------------------------------
-void scroll_callback(GLFWwindow* window, double xOffset, double yOffset)
+void scroll_callback(GLFWwindow *window, double xOffset, double yOffset)
 {
-	float scale = 1.0f + _SCALE_FACTOR * yOffset;
+    float scale = 1.0f + _SCALE_FACTOR * yOffset;
 
-	ScaleModel( scale ); 
+    ScaleModel(scale);
 }
-
-
-
 
 /******************************************************************************/
 /***************                    Main Function                **************/
@@ -276,7 +324,7 @@ int main()
 
     // glfw window creation
     // --------------------
-    GLFWwindow* window = glfwCreateWindow(winWidth, winHeight, "Assignment 1 - Mesh Viewer", NULL, NULL);
+    GLFWwindow *window = glfwCreateWindow(winWidth, winHeight, "Assignment 1 - Mesh Viewer", NULL, NULL);
     if (window == NULL)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
@@ -309,15 +357,15 @@ int main()
     // ------------------------------------
     // vertex shader
     shader myShader;
-    myShader.setUpShader(vertexShaderSource,fragmentShaderSource);
+    myShader.setUpShader(vertexShaderSource, fragmentShaderSource);
 
     // Load input mesh data
-    vector<float> verList;          // This is the list of vertices and normals for rendering
-    vector<unsigned> triList;       // This is the list of faces for rendering
+    vector<float> verList;    // This is the list of vertices and normals for rendering
+    vector<unsigned> triList; // This is the list of faces for rendering
     LoadInput(verList, triList);
 
     // create buffers/arrays
-    unsigned int VBO, VAO,EBO;
+    unsigned int VBO, VAO, EBO;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
     glGenBuffers(1, &EBO);
@@ -332,18 +380,17 @@ int main()
 
     // set the vertex attribute pointers
     // vertex Positions
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void *)0);
     glEnableVertexAttribArray(0);
 
     // vertex normals
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), ((void*)(3* sizeof(float))));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), ((void *)(3 * sizeof(float))));
     glEnableVertexAttribArray(1);
 
     glBindVertexArray(0);
 
-    // as we only have a single shader, we could also just activate our shader once beforehand if we want to 
+    // as we only have a single shader, we could also just activate our shader once beforehand if we want to
     myShader.use();
-
 
     // render loop
     // -----------
@@ -366,7 +413,7 @@ int main()
         glUniformMatrix4fv(glGetUniformLocation(myShader.ID, "view"), 1, GL_FALSE, &view[0][0]);
 
         // render the loaded model
-        //glm::vec3 aColor = glm::vec3 (0.6f, 1.0f, 0.6f);
+        // glm::vec3 aColor = glm::vec3 (0.6f, 1.0f, 0.6f);
         glUniformMatrix4fv(glGetUniformLocation(myShader.ID, "model"), 1, GL_FALSE, &modelMatrix[0][0]);
         glUniform3fv(glGetUniformLocation(myShader.ID, "meshColor"), 1, &colorTable[colorID][0]);
         glUniform3fv(glGetUniformLocation(myShader.ID, "viewPos"), 1, &camera_position[0]);
@@ -375,7 +422,6 @@ int main()
         glBindVertexArray(VAO);
         glDrawElements(GL_TRIANGLES, triList.size(), GL_UNSIGNED_INT, 0);
         glBindVertexArray(0);
-
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
@@ -394,4 +440,3 @@ int main()
     glfwTerminate();
     return 0;
 }
-
