@@ -75,7 +75,7 @@ SkeletalModel myModel;
 void LoadInput()
 {
     // local variables
-    string inputString("../data/Model4.skel");
+    string inputString("./data/Model4.skel");
 
     cout << "Please enter filename.skel: ";
     cin >> inputString;

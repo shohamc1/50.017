@@ -6,3 +6,5 @@ cmake_install.cmake
 
 Assignment_2
 libGLAD.a
+libsource_lib.a
+.vscode/
