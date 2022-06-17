@@ -70,7 +70,7 @@ void SkeletalModel::computeJointTransforms(Joint *joint, MatrixStack matrix_stac
     {
         computeJointTransforms(child, matrix_stack);
     }
-    cout << glm::to_string(matrix_stack.top()) << endl;
+
     jointMatList.push_back(matrix_stack.top());
     matrix_stack.pop();
 }
@@ -103,7 +103,7 @@ void SkeletalModel::computeBoneTransforms(Joint *joint, MatrixStack matrixStack)
         glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f, 0.01f, glm::length(direction)));
         glm::mat4 R = glm::mat4(rotation);
 
-        boneMatList.push_back(transpose(R * S * T) * matrixStack.top());
+        boneMatList.push_back(glm::transpose(R * S * T) * matrixStack.top());
 
         computeBoneTransforms(child, matrixStack);
     }
@@ -120,9 +120,9 @@ void SkeletalModel::setJointTransform(int joint_index, float angle_x, float angl
     glm::mat4 mx, my, mz;
     glm::mat4 identity_matrix = glm::mat4(1.0f);
 
-    mx = glm::rotate(identity_matrix, angle_x, glm::vec3(1, 0, 0));
-    my = glm::rotate(identity_matrix, angle_y, glm::vec3(0, 1, 0));
-    mz = glm::rotate(identity_matrix, angle_z, glm::vec3(0, 0, 1));
+    mx = glm::rotate(identity_matrix, angle_x, glm::vec3(0, 1, 1));
+    my = glm::rotate(identity_matrix, angle_y, glm::vec3(1, 0, 1));
+    mz = glm::rotate(identity_matrix, angle_z, glm::vec3(1, 1, 0));
 
     Joint *joint = m_joints.at(joint_index);
     joint->transform = joint->transform * mx * my * mz;
