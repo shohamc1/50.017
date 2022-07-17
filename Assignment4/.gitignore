@@ -1,0 +1,11 @@
+build/
+CMakeFiles/
+Makefile
+CMakeCache.txt
+cmake_install.cmake
+
+Assignment_4
+libGLAD.a
+libsource_lib.a
+.vscode/
+*.zip
